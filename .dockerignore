@@ -1,0 +1,8 @@
+.git
+.github
+.ddev
+.devcontainer
+node_modules
+var/cache
+var/logs
+tests

@@ -1,0 +1,72 @@
+# Dokploy "Compose" app. Public hostname: myghl.chatgenius24x7.com -> http://192.168.1.13:8097
+# Secrets come from Dokploy environment variables, never from this file.
+services:
+  mautic-db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    command: --innodb-buffer-pool-size=256M --max-connections=60
+    environment:
+      MARIADB_DATABASE: mautic
+      MARIADB_USER: mautic
+      MARIADB_PASSWORD: ${MAUTIC_DB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${MAUTIC_DB_ROOT_PASSWORD}
+    volumes:
+      - mautic_db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy: { resources: { limits: { memory: 768M } } }
+    networks: [mautic-internal]
+
+  mautic-web:
+    build: .
+    restart: unless-stopped
+    depends_on: { mautic-db: { condition: service_healthy } }
+    command: ["web"]
+    ports:
+      - "8097:80"
+    environment: &mautic-env
+      MAUTIC_URL: ${MAUTIC_URL}
+      MAUTIC_DB_HOST: mautic-db
+      MAUTIC_DB_NAME: mautic
+      MAUTIC_DB_USER: mautic
+      MAUTIC_DB_PASSWORD: ${MAUTIC_DB_PASSWORD}
+      MAUTIC_ADMIN_EMAIL: ${MAUTIC_ADMIN_EMAIL}
+      MAUTIC_ADMIN_PASSWORD: ${MAUTIC_ADMIN_PASSWORD}
+      MAUTIC_MAIL_FROM_EMAIL: ${MAUTIC_MAIL_FROM_EMAIL}
+      MAUTIC_MAIL_FROM_NAME: ${MAUTIC_MAIL_FROM_NAME:-Mautic}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      APP_ENV: prod
+      APP_DEBUG: "0"
+    volumes:
+      - mautic_config:/var/www/html/config
+      - mautic_media:/var/www/html/media
+      - mautic_var:/var/www/html/var
+    deploy: { resources: { limits: { memory: 1G } } }
+    networks: [mautic-internal, dokploy-network]
+
+  mautic-cron:
+    build: .
+    restart: unless-stopped
+    depends_on: [mautic-web]
+    command: ["cron"]
+    environment: *mautic-env
+    volumes:
+      - mautic_config:/var/www/html/config
+      - mautic_media:/var/www/html/media
+      - mautic_var:/var/www/html/var
+    deploy: { resources: { limits: { memory: 512M } } }
+    networks: [mautic-internal]
+
+volumes:
+  mautic_db:
+  mautic_config:
+  mautic_media:
+  mautic_var:
+
+networks:
+  mautic-internal:
+  dokploy-network:
+    external: true

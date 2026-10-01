@@ -1,0 +1,8 @@
+# Mautic scheduled jobs (env is exported to /etc/mautic.env by the entrypoint)
+SHELL=/bin/bash
+*/5 * * * * www-data . /etc/mautic.env; cd /var/www/html && php bin/console mautic:segments:update --batch-limit=300 >> /var/log/mautic-cron.log 2>&1
+*/5 * * * * www-data . /etc/mautic.env; cd /var/www/html && php bin/console mautic:campaigns:update --batch-limit=300 >> /var/log/mautic-cron.log 2>&1
+*/5 * * * * www-data . /etc/mautic.env; cd /var/www/html && php bin/console mautic:campaigns:trigger >> /var/log/mautic-cron.log 2>&1
+*/5 * * * * www-data . /etc/mautic.env; cd /var/www/html && php bin/console mautic:emails:send >> /var/log/mautic-cron.log 2>&1
+*/15 * * * * www-data . /etc/mautic.env; cd /var/www/html && php bin/console mautic:broadcasts:send >> /var/log/mautic-cron.log 2>&1
+0 3 * * * www-data . /etc/mautic.env; cd /var/www/html && php bin/console mautic:maintenance:cleanup --days-old=365 --no-interaction >> /var/log/mautic-cron.log 2>&1
