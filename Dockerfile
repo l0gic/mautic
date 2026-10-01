@@ -16,7 +16,9 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www/html
 COPY . .
 ENV COMPOSER_ALLOW_SUPERUSER=1 COMPOSER_MEMORY_LIMIT=-1 APP_ENV=prod APP_DEBUG=0
-RUN composer install --no-dev --optimize-autoloader --no-interaction \
+RUN echo 'memory_limit=-1' > /usr/local/etc/php/conf.d/zz-build.ini \
+ && composer install --no-dev --optimize-autoloader --no-interaction \
+ && rm -f /usr/local/etc/php/conf.d/zz-build.ini \
  && rm -rf node_modules .git /root/.npm /root/.composer/cache
 
 # ---- runtime ----
