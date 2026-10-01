@@ -4,11 +4,12 @@ FROM php:8.3-apache-bookworm AS build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git unzip curl ca-certificates libicu-dev libzip-dev libpng-dev libjpeg-dev \
-      libfreetype6-dev libxml2-dev libonig-dev \
+      libfreetype6-dev libxml2-dev libonig-dev libc-client-dev libkrb5-dev libssl-dev \
  && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
  && apt-get install -y --no-install-recommends nodejs \
  && docker-php-ext-configure gd --with-freetype --with-jpeg \
- && docker-php-ext-install -j"$(nproc)" intl zip gd pdo_mysql bcmath mbstring exif opcache pcntl \
+ && docker-php-ext-configure imap --with-kerberos --with-imap-ssl \
+ && docker-php-ext-install -j"$(nproc)" intl zip gd imap pdo_mysql bcmath mbstring exif opcache pcntl \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -22,7 +23,7 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction \
 # Pinned to bookworm: the runtime package names below (libicu72, libzip4, ...) are Debian 12 names.
 FROM php:8.3-apache-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      cron libicu72 libzip4 libpng16-16 libjpeg62-turbo libfreetype6 libxml2 libonig5 mariadb-client \
+      cron libicu72 libzip4 libpng16-16 libjpeg62-turbo libfreetype6 libxml2 libonig5 libc-client2007e libkrb5-3 mariadb-client \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=build /usr/local/lib/php/extensions /usr/local/lib/php/extensions
 COPY --from=build /usr/local/etc/php/conf.d /usr/local/etc/php/conf.d
