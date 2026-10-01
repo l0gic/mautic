@@ -1,6 +1,6 @@
 # Mautic (l0gic fork, 7.2.1 base) - built from THIS repo so fork changes are what runs.
 # One image, two roles (web / cron) selected by the container command.
-FROM php:8.3-apache AS build
+FROM php:8.3-apache-bookworm AS build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git unzip curl ca-certificates libicu-dev libzip-dev libpng-dev libjpeg-dev \
@@ -19,7 +19,8 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction \
  && rm -rf node_modules .git /root/.npm /root/.composer/cache
 
 # ---- runtime ----
-FROM php:8.3-apache
+# Pinned to bookworm: the runtime package names below (libicu72, libzip4, ...) are Debian 12 names.
+FROM php:8.3-apache-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends \
       cron libicu72 libzip4 libpng16-16 libjpeg62-turbo libfreetype6 libxml2 libonig5 mariadb-client \
  && rm -rf /var/lib/apt/lists/*
