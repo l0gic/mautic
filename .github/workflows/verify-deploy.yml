@@ -1,0 +1,74 @@
+name: Verify Docker deployment
+
+on:
+  push:
+    branches: [production]
+    paths: [Dockerfile, docker-compose.yml, docker/**, .github/workflows/verify-deploy.yml]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      MAUTIC_URL: http://localhost:8097
+      MAUTIC_DB_PASSWORD: ci-db-pass-123
+      MAUTIC_DB_ROOT_PASSWORD: ci-root-pass-123
+      MAUTIC_ADMIN_EMAIL: admin@example.com
+      MAUTIC_ADMIN_PASSWORD: Ci-Admin-Pass-123!
+      MAUTIC_MAIL_FROM_EMAIL: noreply@example.com
+      RESEND_API_KEY: re_dummy_ci_key
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create the external network Dokploy normally provides
+        run: docker network create dokploy-network
+
+      - name: Build image
+        run: docker compose build
+
+      - name: Start stack
+        run: docker compose up -d
+
+      - name: Wait for Mautic to install and serve the login page
+        run: |
+          for i in $(seq 1 120); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8097/s/login || true)
+            echo "attempt $i: HTTP $code"
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 10
+          done
+          echo "Mautic never served /s/login"; exit 1
+
+      - name: Login page really is Mautic
+        run: curl -s http://localhost:8097/s/login | grep -i -E 'mautic|username'
+
+      - name: Admin account was created by the install
+        run: |
+          docker compose exec -T mautic-web su -s /bin/bash www-data -c \
+            "php bin/console doctrine:query:sql \"SELECT username,email FROM users\"" | tee /tmp/users.txt
+          grep -q admin@example.com /tmp/users.txt
+
+      - name: Resend SMTP settings were written to config
+        run: |
+          docker compose exec -T mautic-web grep -c 'smtp.resend.com' config/local.php
+          docker compose exec -T mautic-web grep -c "mailer_from_email" config/local.php
+
+      - name: Cron container is running with its jobs installed
+        run: |
+          docker compose ps mautic-cron --format '{{.State}}' | grep -q running
+          docker compose exec -T mautic-cron cat /etc/cron.d/mautic | grep -c 'mautic:segments:update'
+
+      - name: Data survives a restart (volumes + no re-install)
+        run: |
+          docker compose restart mautic-web
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8097/s/login || true)
+            [ "$code" = "200" ] && break; sleep 5
+          done
+          [ "$code" = "200" ]
+          docker compose logs mautic-web | grep -c 'first run: installing' | grep -q '^1$'
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail 200
